@@ -1,0 +1,39 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: p4ssw0rd
+      POSTGRES_DB: users
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  sso-auth:
+    build: .
+    container_name: sso-auth
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: p4ssw0rd
+      DB_NAME: users
+      DB_SSLMODE: disable
+      DB_TIMEZONE: Europe/Moscow
+      JWT_SECRET: supersecretkey
+    ports:
+      - "8080:8080"
+
+volumes:
+  postgres_data:
