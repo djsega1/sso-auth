@@ -24,6 +24,7 @@ func main() {
 	r := mux.NewRouter()
 	r.HandleFunc("/register", authHandler.Register).Methods("POST")
 	r.HandleFunc("/login", authHandler.Login).Methods("POST")
+	r.HandleFunc("/refresh", authHandler.Refresh).Methods("GET")
 	r.HandleFunc("/validate", authHandler.Validate).Methods("GET")
 
 	log.Println("Auth REST API server running on :8080")

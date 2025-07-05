@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/djsega1/sso-auth/config"
 	"github.com/djsega1/sso-auth/service"
@@ -64,14 +65,56 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := utils.GenerateJWT(req.Username, h.Config.JWTSecret)
+	access_token, err := utils.GenerateJWT(req.Username, h.Config.AccessTokenSecret, time.Hour*24)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to generate token: %v", err), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("Failed to generate access token: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	refresh_token, err := utils.GenerateJWT(req.Username, h.Config.RefreshTokenSecret, time.Hour*24*30)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to generate access token: %v", err), http.StatusInternalServerError)
 		return
 	}
 
 	json.NewEncoder(w).Encode(map[string]string{
-		"access_token": token,
+		"access_token":  access_token,
+		"refresh_token": refresh_token,
+	})
+}
+
+func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		http.Error(w, "Missing Authorization header", http.StatusUnauthorized)
+		return
+	}
+
+	tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
+
+	claims, err := utils.ValidateJWT(tokenStr, h.Config.RefreshTokenSecret)
+	if err != nil {
+		http.Error(w, "Authorization header is invalid", http.StatusForbidden)
+		return
+	}
+
+	username := claims["username"].(string)
+
+	access_token, err := utils.GenerateJWT(username, h.Config.AccessTokenSecret, time.Hour*24)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to generate access token: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	refresh_token, err := utils.GenerateJWT(username, h.Config.RefreshTokenSecret, time.Hour*24*30)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to generate access token: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]string{
+		"access_token":  access_token,
+		"refresh_token": refresh_token,
 	})
 }
 
@@ -84,7 +127,7 @@ func (h *AuthHandler) Validate(w http.ResponseWriter, r *http.Request) {
 
 	tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
 
-	claims, err := utils.ValidateJWT(tokenStr, h.Config.JWTSecret)
+	claims, err := utils.ValidateJWT(tokenStr, h.Config.AccessTokenSecret)
 	if err != nil {
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"valid": false,
